@@ -35,7 +35,23 @@
  * Code related to notifications and DBus.
  */
 
+#ifdef _WIN32
+#include <glib.h>
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
+
 int main(int argc, char *argv[])
 {
+#ifdef _WIN32
+        /* argv arrives in the ANSI code page; dunst (GLib) wants UTF-8. */
+        SetConsoleOutputCP(CP_UTF8);
+        gchar **utf8_argv = g_win32_get_command_line();
+        int ret = dunst_main((int)g_strv_length(utf8_argv), utf8_argv);
+        g_strfreev(utf8_argv);
+        (void)argc; (void)argv;
+        return ret;
+#else
         return dunst_main(argc, argv);
+#endif
 }

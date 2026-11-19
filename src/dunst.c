@@ -8,7 +8,12 @@
 
 #include <assert.h>
 #include <glib.h>
+#ifndef _WIN32
 #include <glib-unix.h>
+#else
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
 #include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -262,6 +267,16 @@ void reload(char **const configs)
 #define CMDLINE_STARTNOTIF "-startup_notification/--startup_notification"
 #define CMDLINE_HELP "-h/-help/--help"
 
+#ifdef _WIN32
+/* Runs on a thread the console subsystem creates: hop to the main loop. */
+static BOOL WINAPI win32_console_handler(DWORD type)
+{
+        (void)type;
+        g_main_context_invoke(NULL, quit_signal, NULL);
+        return TRUE;
+}
+#endif
+
 int dunst_main(int argc, char *argv[])
 {
         dunst_status_int(S_PAUSE_LEVEL, 0);
@@ -312,12 +327,18 @@ int dunst_main(int argc, char *argv[])
 
         draw_setup();
 
+#ifndef _WIN32
         guint pause_src = g_unix_signal_add(SIGUSR1, pause_signal, NULL);
         guint unpause_src = g_unix_signal_add(SIGUSR2, unpause_signal, NULL);
 
         // Register SIGINT/SIGTERM handler for graceful termination
         guint term_src = g_unix_signal_add(SIGTERM, quit_signal, NULL);
         guint int_src = g_unix_signal_add(SIGINT, quit_signal, NULL);
+#else
+        /* SIGINT/SIGTERM: console control events (Ctrl+C, close, logoff).
+         * SIGUSR1/SIGUSR2 (pause): `dunstctl set-paused` over the pipe. */
+        SetConsoleCtrlHandler(win32_console_handler, TRUE);
+#endif
 
 
         if (startnotif) {
@@ -345,11 +366,13 @@ int dunst_main(int argc, char *argv[])
         g_main_loop_run(mainloop);
         g_clear_pointer(&mainloop, g_main_loop_unref);
 
+#ifndef _WIN32
         // Remove signal handler watchers
         g_source_remove(pause_src);
         g_source_remove(unpause_src);
         g_source_remove(term_src);
         g_source_remove(int_src);
+#endif
 
         dbus_teardown(dbus_owner_id);
 
@@ -377,6 +400,7 @@ void print_version(void)
 
         printf("X11 support: %s\n", X11_SUPPORT ? "enabled" : "disabled");
         printf("Wayland support: %s\n", WAYLAND_SUPPORT ? "enabled" : "disabled");
+        printf("Win32 support: %s\n", WIN32_SUPPORT ? "enabled" : "disabled");
         printf("SYSCONFDIR set to: %s\n", SYSCONFDIR);
 
 #ifdef _CFLAGS

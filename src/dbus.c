@@ -22,6 +22,10 @@
 #include "utils.h"
 #include "settings_data.h"
 
+#ifdef _WIN32
+#include "win32/gdbus_shim.h"
+#endif
+
 #define FDN_PATH "/org/freedesktop/Notifications"
 #define FDN_IFAC "org.freedesktop.Notifications"
 #define FDN_NAME "org.freedesktop.Notifications"
@@ -1255,6 +1259,7 @@ gboolean dbus_cb_dunst_Properties_Set(GDBusConnection *connection,
 }
 
 
+#ifndef _WIN32
 static const GDBusInterfaceVTable interface_vtable_fdn = {
         dbus_cb_fdn_methods,
 };
@@ -1459,6 +1464,8 @@ int dbus_init(void)
         return owner_id;
 }
 
+#endif /* !_WIN32 */
+
 void signal_history_removed(guint id)
 {
         if (!dbus_conn) {
@@ -1529,6 +1536,7 @@ void signal_config_reloaded(char **const configs)
         }
 }
 
+#ifndef _WIN32
 void dbus_teardown(int owner_id)
 {
         g_clear_pointer(&introspection_data, g_dbus_node_info_unref);
@@ -1536,3 +1544,7 @@ void dbus_teardown(int owner_id)
         g_bus_unown_name(owner_id);
         dbus_conn = NULL;
 }
+#else
+#include "win32/dbus_win32.inc"
+#endif
+
