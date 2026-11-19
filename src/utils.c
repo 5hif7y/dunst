@@ -508,6 +508,13 @@ bool string_is_int(const char *str) {
 
 bool is_like_path(const char *string)
 {
+#ifdef _WIN32
+        /* C:\icon.png, C:/icon.png, \\server\share\icon.png, .\icon.png, ..\icon.png */
+        if (g_path_is_absolute(string)
+            || (string[0] == '.' && string[1] == '\\')
+            || (string[0] == '.' && string[1] == '.' && string[2] == '\\'))
+                return true;
+#endif
         return string[0] == '/' || string[0] == '~'
                 || (string[0] == '.' && string[1] == '.' && string[2] == '/')
                 || (string[0] == '.' && string[1] == '/');
