@@ -16,6 +16,24 @@
 #ifdef ENABLE_WAYLAND
 #include "wayland/wl.h"
 #endif
+#ifdef _WIN32
+#include "win32/win32.h"
+
+const struct output output_w32 = {
+        w32_init,
+        w32_deinit,
+        w32_win_create,
+        w32_win_destroy,
+        w32_win_show,
+        w32_win_hide,
+        w32_display_surface,
+        w32_win_get_context,
+        w32_get_active_screen,
+        w32_is_idle,
+        w32_have_fullscreen_window,
+        w32_get_scale,
+};
+#endif
 
 bool is_running_wayland(void) {
         char* wayland_display = getenv("WAYLAND_DISPLAY");
@@ -98,6 +116,13 @@ const struct output* get_wl_output(void) {
 
 const struct output* output_create(bool force_xwayland)
 {
+#ifdef _WIN32
+        (void)force_xwayland;
+        LOG_I("Using Win32 output");
+        if (!output_w32.init())
+                DIE("Couldn't initialize Win32 output");
+        return &output_w32;
+#endif
 #ifdef ENABLE_WAYLAND
         if ((!force_xwayland || !X11_SUPPORT) && is_running_wayland()) {
                 LOG_I("Using Wayland output");

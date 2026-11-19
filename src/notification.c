@@ -144,6 +144,53 @@ void notification_run_script(struct notification *n)
                 if (STR_EMPTY(script))
                         continue;
 
+#ifdef _WIN32
+                /* No fork(): spawn directly with a copied environment.
+                 * .ps1 scripts go through PowerShell; .bat/.cmd/.exe run as is. */
+                gchar *n_id_str = g_strdup_printf("%i", n->id);
+                gchar *n_progress_str = g_strdup_printf("%i", n->progress);
+                gchar *n_timeout_str = g_strdup_printf("%"G_GINT64_FORMAT, n->timeout/1000);
+                gchar *n_timestamp_str = g_strdup_printf("%"G_GINT64_FORMAT, n->timestamp / 1000);
+                gchar **envp = g_get_environ();
+                const char *env[][2] = {
+                        {"DUNST_APP_NAME", appname}, {"DUNST_SUMMARY", summary},
+                        {"DUNST_BODY", body}, {"DUNST_ICON_PATH", n->icon_path},
+                        {"DUNST_URGENCY", urgency}, {"DUNST_ID", n_id_str},
+                        {"DUNST_PROGRESS", n_progress_str}, {"DUNST_CATEGORY", n->category},
+                        {"DUNST_STACK_TAG", n->stack_tag}, {"DUNST_URLS", n->urls},
+                        {"DUNST_TIMEOUT", n_timeout_str}, {"DUNST_TIMESTAMP", n_timestamp_str},
+                        {"DUNST_DESKTOP_ENTRY", n->desktop_entry},
+                };
+                for (size_t e = 0; e < G_N_ELEMENTS(env); e++)
+                        envp = g_environ_setenv(envp, env[e][0], env[e][1] ? env[e][1] : "", TRUE);
+
+                GPtrArray *argv = g_ptr_array_new();
+                if (g_str_has_suffix(script, ".ps1")) {
+                        g_ptr_array_add(argv, "powershell.exe");
+                        g_ptr_array_add(argv, "-NoProfile");
+                        g_ptr_array_add(argv, "-ExecutionPolicy");
+                        g_ptr_array_add(argv, "Bypass");
+                        g_ptr_array_add(argv, "-File");
+                }
+                const char *script_args[] = { script, appname, summary, body, icon, urgency };
+                for (size_t a = 0; a < G_N_ELEMENTS(script_args); a++)
+                        g_ptr_array_add(argv, (gpointer)script_args[a]);
+                g_ptr_array_add(argv, NULL);
+
+                GError *err = NULL;
+                if (!g_spawn_async(NULL, (gchar **)argv->pdata, envp, G_SPAWN_SEARCH_PATH,
+                                   NULL, NULL, NULL, &err)) {
+                        LOG_W("Unable to run script %s: %s", script, err->message);
+                        g_error_free(err);
+                }
+                g_ptr_array_free(argv, TRUE);
+                g_strfreev(envp);
+                g_free(n_id_str);
+                g_free(n_progress_str);
+                g_free(n_timeout_str);
+                g_free(n_timestamp_str);
+                continue;
+#else
                 int pid1 = fork();
 
                 if (pid1) {
@@ -187,6 +234,7 @@ void notification_run_script(struct notification *n)
                                 exit(EXIT_FAILURE);
                         }
                 }
+#endif
         }
 }
 

@@ -314,6 +314,10 @@ gint64 string_to_time(const char *string)
 
 gint64 time_monotonic_now(void)
 {
+#ifdef _WIN32
+        /* QueryPerformanceCounter keeps counting across sleep, like BOOTTIME */
+        return g_get_monotonic_time();
+#else
         struct timespec tv_now;
 
         /**
@@ -328,14 +332,19 @@ gint64 time_monotonic_now(void)
         clock_gettime(CLOCK_MONOTONIC, &tv_now);
 #endif
         return S2US(tv_now.tv_sec) + tv_now.tv_nsec / 1000;
+#endif
 }
 
 gint64 time_now(void)
 {
+#ifdef _WIN32
+        return g_get_real_time();
+#else
         struct timespec tv_now;
 
         clock_gettime(CLOCK_REALTIME, &tv_now);
         return S2US(tv_now.tv_sec) + tv_now.tv_nsec / 1000;
+#endif
 }
 
 gint64 modification_time(const char *path)
@@ -344,7 +353,11 @@ gint64 modification_time(const char *path)
         if (!path || stat(path, &statbuf) != 0)
                 return -1;
 
+#ifdef _WIN32
+        return S2US((gint64)statbuf.st_mtime); /* MSVC stat: seconds only */
+#else
         return S2US(statbuf.st_mtim.tv_sec) + statbuf.st_mtim.tv_nsec / 1000;
+#endif
 }
 
 const char *user_get_home(void)
@@ -366,10 +379,7 @@ bool safe_setenv(const char* key, const char* value){
         if (!key)
                 return false;
 
-        if (!value)
-                setenv(key, "", 1);
-        else
-                setenv(key, value, 1);
+        g_setenv(key, value ? value : "", TRUE);
 
         return true;
 }
@@ -498,6 +508,13 @@ bool string_is_int(const char *str) {
 
 bool is_like_path(const char *string)
 {
+#ifdef _WIN32
+        /* C:\icon.png, C:/icon.png, \\server\share\icon.png, .\icon.png, ..\icon.png */
+        if (g_path_is_absolute(string)
+            || (string[0] == '.' && string[1] == '\\')
+            || (string[0] == '.' && string[1] == '.' && string[2] == '\\'))
+                return true;
+#endif
         return string[0] == '/' || string[0] == '~'
                 || (string[0] == '.' && string[1] == '.' && string[2] == '/')
                 || (string[0] == '.' && string[1] == '/');

@@ -72,8 +72,14 @@ struct output {
 #define WAYLAND_SUPPORT 0
 #endif
 
-#if !WAYLAND_SUPPORT && !X11_SUPPORT
-#error "You have to compile at least one output (X11, Wayland)"
+#ifdef _WIN32
+#define WIN32_SUPPORT 1
+#else
+#define WIN32_SUPPORT 0
+#endif
+
+#if !WAYLAND_SUPPORT && !X11_SUPPORT && !WIN32_SUPPORT
+#error "You have to compile at least one output (X11, Wayland, Win32)"
 #endif
 
 /**
